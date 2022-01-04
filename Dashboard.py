@@ -1,4 +1,3 @@
-# Dependencies
 from PIL import Image
 import streamlit as st
 import pandas as pd
@@ -6,28 +5,25 @@ import spacy
 from spacy.matcher import Matcher
 from dashboardContent import func
 import seaborn as sns
+
 import plotly.express as px
 import plotly.graph_objects as go
 from gensim.models.word2vec import Word2Vec
+
 from dashboardContent import dep
 from sklearn.preprocessing import MinMaxScaler
-import fitz
-import matplotlib.pyplot as plt
 
-# Word2Vec Model
 model = Word2Vec.load('w2v.model')
 
 # Sidebar Navigation: 4 Pages
-
-st.sidebar.title("Navigation")
 nav = st.sidebar.selectbox(
-    "", ["Overview", "Ambiguity Scoring Tool", "Policy Results", "Company Policies"])
+    "Navigation:-", ["Overview", "Policy Results", "Tool", "Company Policies"])
 
 
 # Navigation page1: includes Information-------------------------------------------------------------------------------------------
 if nav == "Overview":
 
-    st.title("***Overview***")
+    st.header("***Overview***")
 
     st.markdown("""# **Ambiguity Scoring in Privacy Policies**""")
     st.subheader(
@@ -47,85 +43,30 @@ if nav == "Overview":
     st.image(Image.open('dashboardContent/equation.png'), caption='Equation')
 
 
+# Navigation page2: Analysis tool----------------------------------------------------------------------------------------------------------
+if nav == "Tool":
+    st.header("***Tool***")
 
-# Navigation page2: Analysis Ambiguity Scoring Tool----------------------------------------------------------------------------------------------------------
-if nav == "Ambiguity Scoring Tool":
+    # Scoring model text: pg 14
+    st.subheader(
+        "This tool will analyse your text and give an average privacy score.")
+    myfile_text = st.text_area("Copy the policy text and paste here. ")
+
     nlp = spacy.load("en_core_web_sm")
-    st.title("***Ambiguity Scoring Tool***")
-    st.subheader("Test our algorithm on your custom data.")
+    length_ = len(nlp(myfile_text))
+    st.write(length_)
 
-    st.info("Choose your desired type of input from the selectbox")
-    matrix_text = ''
-    # Allow user to choose type of input.
-    type_input = st.selectbox('Select', ['Choose your desired type of input','PDF', 'Copy and paste text'])
+    if len(myfile_text) > 0:
+        matrix = func.make_df(myfile_text)
 
-    if type_input == 'PDF':
-    # Uploading a pdf
-        uploaded_pdf = st.file_uploader("Load pdf: ", type=['pdf'])
-        pdf_text = ""
-        if uploaded_pdf is not None:
-            doc = fitz.open(stream=uploaded_pdf.read(), filetype="pdf")
-            for page in doc:
-                pdf_text += page.getText()
-            doc.close()
+        print()
+        if "may" in matrix:
+            matrix.index += 1
 
-        if len(pdf_text) > 0:
-            matrix_text = pdf_text
-
-
-    # Getting text input
-    if type_input == 'Copy and paste text':
-        myfile_text = st.text_area("Copy the policy text and paste here. ")
-
-
-        length_ = len(nlp(myfile_text))
-        st.write(length_)
-
-        if len(myfile_text) > 0:
-            matrix_text=myfile_text
-
-    # Generating matrix
-    matrix = func.make_df(matrix_text)
-    document = nlp(matrix_text)
-    num_sents = 0
-    for sent in document.sents:
-        num_sents+=1
-
-    if "may" in matrix:
-        max_len = len(matrix)
-        word_count = matrix[['depending', 'necessary', 'appropriate', 'inappropriate', 'as needed',
-       'as applicable', 'otherwise reasonably', 'sometimes',
-       'from time to time', 'generally', 'mostly', 'widely', 'general',
-       'commonly', 'usually', 'normally', 'typically', 'largely', 'often',
-       'primarily', 'among other things', 'may', 'might', 'can', 'could',
-       'would', 'likely', 'possible', 'possibly', 'anyone', 'certain',
-       'everyone', 'numerous', 'some', 'most', 'few', 'much', 'many',
-       'various', 'including but not limited to']].sum(axis=0).sort_values(ascending=False)
-        matrix.index += 1
-
-        st.success(f"Text Analysis Successfull.")
-        st.error(f"Ambiguous Phrases: **{max_len}** ")
-        st.warning(f"Total Phrases:     **{num_sents}**")
-
-        tool_res = st.selectbox('' ,['Top Ambiguous words', 'Show Matrix'])
-        if tool_res == 'Top Ambiguous words':
-            st.bar_chart(word_count.head(5))
-
-            def countPlot():
-                fig = plt.figure(figsize=(10, 4))
-                sns.countplot('Category', data=matrix)
-                st.pyplot(fig)
-            countPlot()
-
-
-        if tool_res == 'Show Matrix':
-
-            entries = st.slider("", 1, max_len, 1)
-
-            st.table(matrix[["Category", "Amb_Terms", "Amb_Phrase"]].head(entries))
-
-    elif matrix!= '':
-        st.write("No vague terms found. Try again please.")
+            st.table(matrix.loc[:, ["Category", "Amb_Terms", "Amb_Phrase"]])
+            st.write("Average vagueness score = ", matrix['BT Coeff'].mean())
+        else:
+            st.write("No vague terms found.Try again please.")
 
 
 # Navigation page3: includes Information--------------------------------------------------------------------------------------------------
@@ -142,7 +83,7 @@ elif nav == "Policy Results":
     fi.add_trace(go.Scatter(
         x=analysis['category'],
         y=analysis['Probability'],
-        name='Probability of Occurence',
+        name='Ambiguity Score',
 
         marker_color='indianred',
 
@@ -151,7 +92,7 @@ elif nav == "Policy Results":
     fi.add_trace(go.Bar(
         x=analysis['category'],
         y=analysis['bt_coef'],
-        name='Ambiguity Score',
+        name='Probability of Occurrence',
 
         marker_color='lightsalmon'
 
@@ -187,13 +128,11 @@ elif nav == "Policy Results":
 
 # Navigation page4: Analysis of Policies---------------------------------------------------------------------------------------------
 elif nav == "Company Policies":
-    st.title("Company Policies")
-    Policies = pd.read_csv("dashboardContent/Policies_Results.csv")
-    # Creating buttons for important companies
+
     amazon, snapchat, flipkart, whatsapp, facebook, instagram = st.beta_columns(
         6)
 
-    comp_name = 0
+    comp_name = 8
     company_ = 'Amazon'
     with amazon:
         if st.button("Amazon",):
@@ -221,10 +160,9 @@ elif nav == "Company Policies":
         if st.button("Instagram"):
             comp_name = 48
             company_ = 'Instagram'
-    # Displaying data of the company selected
 
-    if comp_name != 0:
-
+    if comp_name != '':
+        Policies = pd.read_csv("dashboardContent/Policies_Results.csv")
         st.header(f"***{company_}***")
         a, b, c = st.beta_columns(3)
 
